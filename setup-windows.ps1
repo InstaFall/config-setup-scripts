@@ -102,7 +102,6 @@ $packages = @(
     "DEVCOM.JetBrainsMonoNerdFont",   # the font family is "JetBrainsMono Nerd Font"
     "Neovim.Neovim",
     "JesseDuffield.lazygit",
-    "junegunn.fzf",
     "BurntSushi.ripgrep.MSVC",
     "sharkdp.fd",
     "zig.zig",                        # C compiler for nvim-treesitter (zig cc is supported)
@@ -137,6 +136,23 @@ if (-not (Install-TreeSitter "$tsBase/latest/download/tree-sitter-cli-windows-x6
     }
 }
 & (Join-Path $BinDir "tree-sitter.exe") --version
+
+# ---------------------------------------------------------------- fzf (GitHub release)
+Log "Installing fzf (latest release)"
+# /releases/latest redirects to /releases/tag/vX.Y.Z - read the tag from the final URL (no API rate limit).
+# Works on both Windows PowerShell 5.1 and PowerShell 7+.
+$fzfResp = Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/junegunn/fzf/releases/latest"
+$fzfUrl  = if ($fzfResp.BaseResponse.ResponseUri) { $fzfResp.BaseResponse.ResponseUri.AbsoluteUri }
+           else { $fzfResp.BaseResponse.RequestMessage.RequestUri.AbsoluteUri }
+if ($fzfUrl -notmatch "/tag/(v[\d.]+)") { throw "Could not determine latest fzf version (got: $fzfUrl)" }
+$fzfTag  = $Matches[1]
+$fzfVer  = $fzfTag.TrimStart("v")
+$fzfZip  = Join-Path $Work "fzf.zip"
+$fzfOut  = Join-Path $Work "fzf"
+Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/junegunn/fzf/releases/download/$fzfTag/fzf-$fzfVer-windows_amd64.zip" -OutFile $fzfZip
+Expand-Archive -Path $fzfZip -DestinationPath $fzfOut -Force
+Copy-Item (Join-Path $fzfOut "fzf.exe") (Join-Path $BinDir "fzf.exe") -Force
+& (Join-Path $BinDir "fzf.exe") --version
 
 # ---------------------------------------------------------------- Node via nvm-windows + pnpm
 Log "Installing Node ($NodeVersion) via nvm-windows, then pnpm"

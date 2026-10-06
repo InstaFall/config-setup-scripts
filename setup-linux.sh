@@ -83,8 +83,8 @@ have sudo || die "sudo is required for the apt steps."
 have apt-get || die "This script targets Debian/Ubuntu/Pop!_OS (apt)."
 
 case "$(uname -m)" in
-  x86_64 | amd64) NVIM_ARCH="x86_64"; TS_ARCH="x64";   LG_ARCH="x86_64" ;;
-  aarch64 | arm64) NVIM_ARCH="arm64"; TS_ARCH="arm64"; LG_ARCH="arm64" ;;
+  x86_64 | amd64) NVIM_ARCH="x86_64"; TS_ARCH="x64";   LG_ARCH="x86_64"; FZF_ARCH="amd64" ;;
+  aarch64 | arm64) NVIM_ARCH="arm64"; TS_ARCH="arm64"; LG_ARCH="arm64";  FZF_ARCH="arm64" ;;
   *) die "Unsupported CPU architecture: $(uname -m)" ;;
 esac
 
@@ -108,16 +108,25 @@ sudo apt-get update
 sudo apt-get install -y \
   git curl wget unzip tar xz-utils ca-certificates gpg \
   build-essential fontconfig \
-  fzf ripgrep fd-find
+  ripgrep fd-find
 
 # Ubuntu ships fd as "fdfind"; LazyVim/fzf-lua look for "fd"
 if ! have fd && have fdfind; then
   ln -sf "$(command -v fdfind)" "$BIN_DIR/fd"
 fi
 
-if have fzf && ! version_ge "$(fzf --version | awk '{print $1}')" "0.25.1"; then
-  warn "fzf $(fzf --version | awk '{print $1}') is older than 0.25.1 — fzf-lua wants >= 0.25.1"
-fi
+# ---------------------------------------------------------------- fzf (GitHub release; the apt one is too old)
+log "Installing fzf (latest release)"
+FZF_TAG="$(latest_tag junegunn/fzf)"
+FZF_VER="${FZF_TAG#v}"
+mkdir -p "$WORK/fzf"
+download "https://github.com/junegunn/fzf/releases/download/${FZF_TAG}/fzf-${FZF_VER}-linux_${FZF_ARCH}.tar.gz" "$WORK/fzf.tar.gz"
+tar -xzf "$WORK/fzf.tar.gz" -C "$WORK/fzf" fzf
+install -m 0755 "$WORK/fzf/fzf" "$BIN_DIR/fzf"
+# ~/.local/bin is first on PATH, so this wins over any older /usr/bin/fzf already on the machine
+hash -r
+echo "fzf $("$BIN_DIR/fzf" --version | awk '{print $1}')"
+version_ge "$("$BIN_DIR/fzf" --version | awk '{print $1}')" "0.25.1" || warn "fzf is older than 0.25.1 — fzf-lua wants >= 0.25.1"
 
 # ---------------------------------------------------------------- Neovim (release tarball)
 log "Installing Neovim (latest release)"
