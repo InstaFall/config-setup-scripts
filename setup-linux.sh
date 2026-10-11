@@ -64,10 +64,15 @@ backup_if_exists() {
   fi
 }
 
-# clone_or_update URL DEST  (keeps an existing clone of the same repo, backs up anything else)
+norm_url() { local u="${1%/}"; printf '%s' "${u%.git}" | tr '[:upper:]' '[:lower:]'; }
+
+# clone_or_update URL DEST (keeps an existing clone of the same repo, backs up anything else)
 clone_or_update() {
   local url="$1" dest="$2"
-  if [ -d "$dest/.git" ] && [ "$(git -C "$dest" remote get-url origin 2>/dev/null || true)" = "$url" ]; then
+  local have_url
+  have_url="$(git -C "$dest" remote get-url origin 2>/dev/null || true)"
+  # compare ignoring a trailing ".git" or "/"
+  if [ -d "$dest/.git" ] && [ "$(norm_url "$have_url")" = "$(norm_url "$url")" ]; then
     log "Updating $dest"
     git -C "$dest" pull --ff-only || warn "Could not fast-forward $dest (local changes?) — left as is"
   else
