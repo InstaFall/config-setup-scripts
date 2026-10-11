@@ -40,10 +40,19 @@ function Warn($msg) { Write-Host "WARN: $msg" -ForegroundColor Yellow }
 function Have($cmd) { [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 
 function Refresh-Path {
+    # Installers like nvm-windows put %NVM_HOME% / %NVM_SYMLINK% in PATH, so those variables must be loaded
+    # into this session too, and the registry's unexpanded %VAR% entries must be expanded.
+    foreach ($name in "NVM_HOME", "NVM_SYMLINK") {
+        $val = [Environment]::GetEnvironmentVariable($name, "Machine")
+        if (-not $val) { $val = [Environment]::GetEnvironmentVariable($name, "User") }
+        if ($val) { Set-Item -Path "Env:$name" -Value $val }
+    }
     $m = [Environment]::GetEnvironmentVariable("Path", "Machine")
     $u = [Environment]::GetEnvironmentVariable("Path", "User")
-    $env:Path = "$m;$u"
+    $env:Path = [Environment]::ExpandEnvironmentVariables("$m;$u")
 }
+
+function Normalize-Url($u) { ([string]$u).Trim().TrimEnd("/") -replace "\.git$", "" | ForEach-Object { $_.ToLower() } }
 
 function Add-UserPath($dir) {
     $cur = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -71,7 +80,7 @@ function Backup-IfExists($path) {
 }
 
 function Clone-OrUpdate($url, $dest) {
-    if ((Test-Path (Join-Path $dest ".git")) -and ((git -C $dest remote get-url origin 2>$null) -eq $url)) {
+    if ((Test-Path (Join-Path $dest ".git")) -and ((Normalize-Url (git -C $dest remote get-url origin 2>$null)) -eq (Normalize-Url $url))) {
         Log "Updating $dest"
         git -C $dest pull --ff-only
         if ($LASTEXITCODE -ne 0) { Warn "Could not fast-forward $dest - left as is" }
@@ -104,7 +113,7 @@ $packages = @(
     "JesseDuffield.lazygit",
     "BurntSushi.ripgrep.MSVC",
     "sharkdp.fd",
-    "zig.zig",                        # C compiler for nvim-treesitter (zig cc is supported)
+    "BrechtSanders.WinLibs.POSIX.UCRT",   # gcc, the C compiler nvim-treesitter needs
     "CoreyButler.NVMforWindows"
 )
 foreach ($p in $packages) { Winget-Install $p }
@@ -223,7 +232,7 @@ if (-not $SkipPlugins) {
 
 # ---------------------------------------------------------------- summary
 Log "Done. Open a NEW terminal so PATH changes apply."
-foreach ($t in "git", "nvim", "lazygit", "fzf", "rg", "fd", "zig", "tree-sitter", "node", "pnpm", "wezterm") {
+foreach ($t in "git", "nvim", "lazygit", "fzf", "rg", "fd", "gcc", "tree-sitter", "node", "pnpm", "wezterm") {
     if (Have $t) { Write-Host ("  {0,-12} found" -f $t) } else { Write-Host ("  {0,-12} MISSING (new terminal needed?)" -f $t) -ForegroundColor Yellow }
 }
 Remove-Item $Work -Recurse -Force -ErrorAction SilentlyContinue
